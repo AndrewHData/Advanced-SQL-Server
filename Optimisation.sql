@@ -717,5 +717,8 @@ FROM #PersonContactInfo A
 	JOIN AdventureWorks2017.Person.EmailAddress B
 		ON A.BusinessEntityID = B.BusinessEntityID
 
---Add nonclustered index on EmailAddress
+-- See the result
+SELECT * FROM #PersonContactInfo
 
+-- Drop table #PersonContactInfo
+DROP TABLE #PersonContactInfo
