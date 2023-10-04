@@ -448,6 +448,9 @@ Downsides of Index:
 - They take up memory
 - Makes inserts into tables longer
 
+When to use it?
+Use clustered index if our temp table will be joiing with others. 
+
 Example below
 */
 
@@ -722,3 +725,175 @@ SELECT * FROM #PersonContactInfo
 
 -- Drop table #PersonContactInfo
 DROP TABLE #PersonContactInfo
+
+
+-------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------
+-----------------  LOOKUP TABLES -----------------
+--------------------------------------------------
+
+/*
+
+Make the temp tables permanent objects on our server.
+
+-=--------------------------------
+Probably good to know for an interview
+DDL = Data Definition Language commands: pertain to the structure and definition of a table. Includes CREATE, DROP, and TRUNCATE.
+
+DML = Data Manipulation Language commands: manipulates the data within the tables. Includes INSERT, UPDATE, and DELETE
+----------------------------------
+
+Benefits of lookup tables:
+- Eliminates duplicating efforts by putting frequently used attributes into one place
+- Promote data integrity by consolidating into a 'single truth'
+- An example is a date table.
+
+*/
+--Example of doing a calendar lookup table
+
+--Create the Calendar table
+CREATE TABLE AdventureWorks2017.dbo.Calendar
+(
+DateValue DATE,
+DayOfWeekNumber INT,
+DayOfWeekName VARCHAR(32),
+DayOfMonthNumber INT,
+MonthNumber INT,
+YearNumber INT,
+WeekendFlag TINYINT,
+HolidayFlag TINYINT
+)
+;
+
+--Instead of inserting each row by typing it out individually, we can use recursive CTEs!
+--Create recursive CTE and insert into DateValue
+WITH DateSeries AS
+(
+SELECT CAST('2011-01-01' AS DATE) as MyDate
+
+UNION ALL
+
+SELECT
+	DATEADD(DAY,1,MyDate)
+FROM DateSeries
+WHERE MyDate < CAST('2019-12-31' AS DATE)
+)
+
+--Insert into the Calendar table
+INSERT INTO AdventureWorks2017.dbo.Calendar
+(
+DateValue
+)
+
+SELECT
+MyDate
+FROM DateSeries
+OPTION(MAXRECURSION 15000)
+
+
+--Update some of the other columns now that we have our DateValue column filled
+UPDATE AdventureWorks2017.dbo.Calendar
+SET
+	DayOfWeekNumber = DATEPART(WEEKDAY,DateValue),
+	DayOfWeekName = FORMAT(DateValue,'dddd'),
+	DayOfMonthNumber = DAY(DateValue),
+	MonthNumber = MONTH(DateValue),
+	YearNumber = YEAR(DateValue)
+
+
+--Update the weekend flag 
+UPDATE AdventureWorks2017.dbo.Calendar
+SET
+	WeekendFlag = 	CASE 
+					WHEN DayOfWeekName IN ('Saturday','Sunday') 
+					THEN 1 
+					ELSE 0 
+					END
+
+
+--Update the holiday flag 
+UPDATE AdventureWorks2017.dbo.Calendar
+SET
+	HolidayFlag = 	CASE 
+					WHEN DayOfMonthNumber = 1 AND MonthNumber = 1 
+					THEN 1 
+					ELSE 0 
+					END
+
+
+--Now we've created our Calendar table!
+--Let's join it with another table to see what it looks like for sales only on weekend
+SELECT
+A.*
+FROM AdventureWorks2017.Sales.SalesOrderHeader A
+	JOIN AdventureWorks2017.dbo.Calendar B
+		ON A.OrderDate = B.DateValue
+
+WHERE B.WeekendFlag = 1
+
+
+-- Query the calendar table to check
+SELECT * FROM adventureworks2017.dbo.Calendar
+
+
+--Use to Truncate the Calendar table
+TRUNCATE table AdventureWorks2017.dbo.Calendar
+
+
+--Use to drop the Calendar table
+DROP TABLE AdventureWorks2017.dbo.Calendar
+
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+--Lookup Tables - Exercises
+
+/*
+Exercise 1
+Update your calendar lookup table with a few holidays of your choice that always fall on the same day of the year - for example, New Year's.
+*/
+
+UPDATE AdventureWorks2017.dbo.Calendar
+SET	
+	HolidayFlag = 	CASE 
+					WHEN (DayOfMonthNumber = 1 AND MonthNumber = 1)
+						OR (DayOfMonthNumber = 31 AND MonthNumber = 10)
+						OR (DayOfMonthNumber = 24 AND MonthNumber = 12)
+						OR (DayOfMonthNumber = 25 AND MonthNumber = 12)
+						OR (DayOfMonthNumber = 31 AND MonthNumber = 12)
+						OR (DayOfMonthNumber = 1 AND MonthNumber = 4)
+						OR (DayOfMonthNumber = 30 AND MonthNumber = 6)
+						OR (DayOfMonthNumber = 4 AND MonthNumber = 7)
+						OR (DayOfMonthNumber = 11 AND MonthNumber = 11)
+						OR (DayOfMonthNumber = 2 AND MonthNumber = 2)
+						OR (DayOfMonthNumber = 3 AND MonthNumber = 3)
+						OR (DayOfMonthNumber = 14 AND MonthNumber = 3)
+					THEN 1 
+					ELSE 0 
+					END
+
+
+/*
+Exercise 2
+Using your updated calendar table, pull all purchasing orders that were made on a holiday. It's fine to simply select all columns via SELECT *.
+*/
+SELECT
+*
+FROM Purchasing.PurchaseOrderHeader A
+	JOIN Adventureworks2017.dbo.Calendar B
+		ON A.OrderDate = B.DateValue
+
+WHERE B.HolidayFlag = 1
+
+/*
+Exercise 3
+Again using your updated calendar table, now pull all purchasing orders that were made on a holiday that also fell on a weekend.
+*/
+SELECT
+*
+FROM Purchasing.PurchaseOrderHeader A
+	JOIN Adventureworks2017.dbo.Calendar B
+		ON A.OrderDate = B.DateValue
+
+WHERE B.HolidayFlag = 1 
+	AND B.WeekendFlag = 1
