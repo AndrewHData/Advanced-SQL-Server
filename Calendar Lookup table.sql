@@ -1,7 +1,7 @@
 --Example of doing a calendar lookup table
 
 --Create the Calendar table
-CREATE TABLE calendar
+CREATE TABLE #calendar
 (
 DateValue DATE,
 DayOfWeekNumber INT,
@@ -29,7 +29,7 @@ WHERE MyDate < CAST('2019-12-31' AS DATE)       --Set your end date
 )
 
 --Insert into the DateValue field in the Calendar table
-INSERT INTO calendar
+INSERT INTO #calendar
 (
 DateValue
 )
@@ -41,7 +41,7 @@ OPTION(MAXRECURSION 15000)
 
 
 --Update some of the other columns now that we have our DateValue column filled
-UPDATE calendar
+UPDATE #calendar
 SET
 	DayOfWeekNumber = DATEPART(WEEKDAY,DateValue),
 	DayOfWeekName = FORMAT(DateValue,'dddd'),
@@ -51,7 +51,7 @@ SET
 
 
 --Update the weekend flag 
-UPDATE calendar
+UPDATE #calendar
 SET
 	WeekendFlag = 	CASE 
 					WHEN DayOfWeekName IN ('Saturday','Sunday') 
@@ -61,7 +61,7 @@ SET
 
 
 --Update the holiday flag. Add your own as well.
-UPDATE calendar
+UPDATE #calendar
 SET
 	HolidayFlag = 	CASE 
 					WHEN DayOfMonthNumber = 1 AND MonthNumber = 1
@@ -78,12 +78,12 @@ SET
 -- Useful queries --
 --------------------------------------------------------------------------
 -- Query the calendar table to check
-SELECT * FROM calendar
+SELECT * FROM #calendar
 
 
 --Use to Truncate the Calendar table
-TRUNCATE table calendar
+TRUNCATE table #calendar
 
 
 --Use to drop the Calendar table
-DROP TABLE calendar
+DROP TABLE #calendar
