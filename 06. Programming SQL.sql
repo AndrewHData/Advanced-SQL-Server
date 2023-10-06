@@ -351,4 +351,183 @@ DECLARE @PayPeriodStart DATE = DATEADD(DAY,1,DATEADD(MONTH,-1,@PayPeriodEnd))
 SELECT @PayPeriodStart
 SELECT @PayPeriodEnd
 
------------------------------------------------
+-----------------------------------------------------
+-----------------------------------------------------
+-------------  USER DEFINED FUNCTIONS  --------------
+-----------------------------------------------------
+/*
+
+Doing a bit of hacking to make our own functions if the SQL function doesn't exist
+
+*/
+
+--When we create a function make sure we are working within the selected database or use the USE [database] GO syntax
+
+USE AdventureWorks2017
+
+GO
+
+-- Create the function. name of the function is after dbo.
+CREATE FUNCTION dbo.ufnCurrentDate() 				-- Empty parentheses is a must
+
+RETURNS DATE 								--DATE is the datatype
+
+AS											--keyword
+
+BEGIN
+	RETURN CAST(GETDATE() AS DATE)			--the function lives between BEGIN and END
+END
+
+;
+-----------------------------------------------------
+-- Example of using a User Defined Function below
+SELECT
+	SalesOrderID,
+	OrderDate,
+	DueDate,
+	ShipDate,
+	[Today] = dbo.ufnCurrentDate()
+
+FROM AdventureWorks2017.Sales.SalesOrderHeader
+;
+
+-------------------------------------------------------
+------------ Making Functions Flexible with Parameters
+/*
+Example of using user defined function
+
+Business wants to know the count of Business days between the Order Date and Ship Date. 
+*/
+
+--Starter code
+SELECT
+	SalesOrderID,
+	OrderDate,
+	DueDate,
+	ShipDate,
+  	ElapsedBusinessDays = (
+		SELECT
+			COUNT(*)
+		FROM AdventureWorks2019.dbo.Calendar B
+		WHERE B.DateValue BETWEEN A.OrderDate AND A.ShipDate
+			AND B.WeekendFlag = 0
+			AND B.HolidayFlag = 0
+	) - 1	
+FROM AdventureWorks2017.Sales.SalesOrderHeader A
+
+--Create the user defined function
+USE AdventureWorks2017
+
+GO
+
+CREATE FUNCTION dbo.ufnElapsedBusinessDays(@StartDate DATE, @EndDate DATE) 	--Create the two parameters in the parentheses
+
+RETURNS INT
+
+AS
+
+BEGIN
+
+RETURN																		
+		(
+			SELECT
+				COUNT(*)
+			FROM AdventureWorks2017.dbo.Calendar
+
+			WHERE DateValue BETWEEN @StartDate AND @EndDate
+				AND WeekendFlag = 0
+				AND HolidayFlag = 0
+		)	- 1
+END
+;
+
+-- Drop the Elapsed Business Days function
+DROP FUNCTION dbo.ufnElapsedBusinessDays
+
+-- Now use the function in the Starter code
+
+SELECT
+	SalesOrderID,
+	OrderDate,
+	DueDate,
+	ShipDate,
+  	ElapsedBusinessDays = dbo.ufnElapsedBusinessDays(OrderDate,ShipDate)	--We can even put in DueDate and other dates
+ FROM AdventureWorks2017.Sales.SalesOrderHeader A
+
+ ---------------------------------------------------
+ /*
+ User Defined Functions - Exercises
+
+Exercise 1
+
+Create a user-defined function that returns the percent that one number is of another.
+For example, if the first argument is 8 and the second argument is 10, the function should return the string "80.00%".
+The function should solve the "integer division" problem by allowing you to divide an integer by another integer, and yet get an accurate decimal result.
+
+Hints:
+Remember that you can implicitly convert an integer to a decimal by multiplying it by 1.0.
+You can format a decimal (say, 0.1) as a percent (10%) with the following code: FORMAT(0.1, 'P').
+Remember that the the return value of the function should be a text string.
+
+*/
+
+USE AdventureWorks2017
+
+GO
+
+CREATE FUNCTION dbo.ufnPercentage(@numerator INT, @denominator INT)
+
+RETURNS VARCHAR(10)		--Don't forget about to change it to the desired output.
+
+AS
+
+BEGIN
+	
+DECLARE @Decimal FLOAT = ( @numerator * 1.0 / @denominator )
+
+RETURN	FORMAT(@Decimal,'P')																		
+		
+END
+
+
+-- If need to drop the created function
+DROP FUNCTION dbo.ufnPercentage
+
+
+--Testing to see if the function worked
+SELECT
+	SalesOrderID,
+	OrderDate,
+	DueDate,
+	ShipDate,
+  [percentage] = dbo.ufnPercentage(TaxAmt,TotalDue)
+ FROM AdventureWorks2017.Sales.SalesOrderHeader A
+
+--------------------------------------------------------------------------------
+/*
+Exercise 2
+Store the maximum amount of vacation time for any individual employee in a variable.
+Then create a query that displays all rows and the following columns from the AdventureWorks2019.HumanResources.Employee table:
+BusinessEntityID
+JobTitle
+VacationHours
+
+Then add a derived field called "PercentOfMaxVacation", which returns the percent an individual employees' vacation hours are of the maximum vacation hours for any employee.
+
+For example, the record for the employee with the most vacation hours should have a value of 100.00%, in this column. The derived field should make use of your user-defined function from the previous exercise, as well as your variable that stored the maximum vacation hours for any employee.
+
+*/
+
+--Create max vacation time variable
+DECLARE @MaxVacationHours FLOAT
+
+SET @MaxVacationHours = (SELECT MAX(VacationHours) FROM AdventureWorks2017.HumanResources.Employee)
+
+SELECT
+	BusinessEntityID,
+	JobTitle,
+	VacationHours,
+	PercentOfMaxVacation = dbo.ufnPercentage(VacationHours,@MaxVacationHours)
+FROM AdventureWorks2017.HumanResources.Employee
+
+--------------------------------------------------------------------------------
