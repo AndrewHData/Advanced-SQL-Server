@@ -531,3 +531,201 @@ SELECT
 FROM AdventureWorks2017.HumanResources.Employee
 
 --------------------------------------------------------------------------------
+
+-----------------------------------------------------
+----------------  STORED PROCEDURES  ----------------
+-----------------------------------------------------
+
+/*
+
+Allows us to store sql queries in the database.
+We can use this alongside parameters.
+
+Syntax:
+
+CREATE PROCEDURE dbo.[name of procedure]
+
+AS
+
+BEGIN
+	
+	[code]
+
+END
+*/
+
+-- Below is an example of how we can convert a query into a stored procedures --
+
+-- Starter Code
+SELECT
+	*
+FROM(
+	SELECT
+		product_name = B.Name,
+		line_total_sum = SUM(A.LineTotal),
+		line_total_sum_rank = DENSE_RANK() OVER (ORDER BY Sum(A.LineTotal) DESC)
+
+	FROM AdventureWorks2017.Sales.SalesOrderDetail A
+		JOIN AdventureWorks2017.Production.Product B
+			ON A.ProductID = B.ProductID
+	
+	GROUP BY
+		B.Name
+) X
+
+WHERE line_total_sum_rank <= 10
+
+-- Use the Syntax and insert the starter code into the code block
+CREATE PROCEDURE dbo.OrdersReport
+
+AS
+
+BEGIN
+
+	SELECT
+		*
+	FROM(
+		SELECT
+			product_name = B.Name,
+			line_total_sum = SUM(A.LineTotal),
+			line_total_sum_rank = DENSE_RANK() OVER (ORDER BY Sum(A.LineTotal) DESC)
+
+		FROM AdventureWorks2017.Sales.SalesOrderDetail A
+			JOIN AdventureWorks2017.Production.Product B
+				ON A.ProductID = B.ProductID
+	
+		GROUP BY
+			B.Name
+			
+		) X
+
+	WHERE line_total_sum_rank <= 10
+
+END
+;
+
+
+/* To check if the Stored Procedure actually worked, go into the Object Explorer (Connections view in VSCode) with all the folders, and refresh the "Stored Procedures" folder.
+
+The folder can be found under "Programmability"
+
+*/
+
+-- To execute the stored procedure, use the syntax EXEC and the the procedure
+EXEC dbo.OrdersReport
+
+
+-- What if instead of top 10, we wanted the to make it more flexible so users could choose the top N instead? Let's Turn it into a parameter!
+
+-- To do that, we replace the CREATE keyword with ALTER
+/* How do we get to where the logic is stored on the server so we can change this?
+
+In the Object Explorer:
+- Programmability -> Stored Procedures
+- Right click on the procedure
+- If using SSMS:
+	- Sript Stored Procedure as
+	- ALTER To
+	- New Query Editor Window
+- In VSCode:
+		- Select Script as Alter
+
+- Modify the script to get the Top N parameter by adding a variable and data type in parentheses after the Stored Procedure name
+
+*/
+
+-- Below is the script that comes up
+-- Change it by adding a variable and data type within parentheses after the procedures. Then replace the number for top N with the variable 
+USE [AdventureWorks2017]
+GO
+
+/****** Object:  StoredProcedure [dbo].[OrdersReport]    Script Date: 9/10/2023 1:37:24 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER PROCEDURE [dbo].[OrdersReport] (@TopN Int)
+
+AS
+
+BEGIN
+
+	SELECT
+		*
+	FROM(
+		SELECT
+			product_name = B.Name,
+			line_total_sum = SUM(A.LineTotal),
+			line_total_sum_rank = DENSE_RANK() OVER (ORDER BY Sum(A.LineTotal) DESC)
+
+		FROM AdventureWorks2017.Sales.SalesOrderDetail A
+			JOIN AdventureWorks2017.Production.Product B
+				ON A.ProductID = B.ProductID
+	
+		GROUP BY
+			B.Name
+			
+		) X
+
+	WHERE line_total_sum_rank <= @TopN
+
+END
+;
+GO
+;
+
+
+-- Let's check if that worked by calling the Stored Procedure again and using the parameter
+-- Execute the Store Procedure using Top 15
+EXEC dbo.OrdersReport 15
+
+-- Execute the Stored Procedure using Top 5
+EXEC dbo.OrdersReport 5
+
+
+--------------------------------------------------------------------------------------------------------------
+/*
+
+Stored Procedures - Exercise
+
+Create a stored procedure called "OrdersAboveThreshold" that pulls in all sales orders with a total due amount above a threshold specified in a parameter called "@Threshold". The value for threshold will be supplied by the caller of the stored procedure.
+
+The proc should have two other parameters: "@StartYear" and "@EndYear" (both INT data types), also specified by the called of the procedure. All order dates returned by the proc should fall between these two years.
+
+*/
+
+
+-- Begin by working out the SQL query to place in the code block
+-- This is a placeholder select query
+SELECT
+		A.SalesOrderID,
+		A.TotalDue,
+		A.OrderDate
+
+FROM 	sales.SalesOrderHeader A
+
+WHERE 	A.TotalDue > 100
+	AND	A.OrderDate BETWEEN '2013-01-01' AND '2013-12-31'
+;
+
+
+-- Insert the placeholder query into the syntax and replace with parameters
+CREATE PROCEDURE dbo.OrdersAboveThreshold (@Threshold INT, @StartYear INT, @EndYear INT)
+
+AS
+
+BEGIN
+
+SELECT
+		A.SalesOrderID,
+		A.TotalDue,
+		A.OrderDate
+
+FROM 	sales.SalesOrderHeader A
+
+WHERE 	A.TotalDue > @Threshold																	-- Replaced 100 with @Threshold INT variable
+	AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)		-- Replaced the date with @StartYear and @EndYear INT variables
+
+END
