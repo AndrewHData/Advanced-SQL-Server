@@ -1429,37 +1429,6 @@ SELECT
 FROM Person.Person
 WHERE FirstName LIKE '%an%' -- We will be editing LIKE and the wildcard (in quotation)
 
-/* This is the @MatchType condition code on its own
-
-
-DECLARE @MatchTypeConditions VARCHAR(255) = 
-	-- Condition 1: @Matchtype is 'exact match'
-	IF @MatchType = 1
-	BEGIN
-		SET @MatchTypeConditions = ' = ' + @SearchPattern
-	END
-
-
-	-- Condition 2: @Matchtype is 'begins with'
-	IF @MatchType = 2
-	BEGIN
-		SET @MatchTypeConditions = ' LIKE ' + @SearchPattern + '%'''
-	END
-
-	-- Condition 3: @Matchtype is 'ends with'
-	IF @MatchType = 3
-	BEGIN
-		SET @MatchTypeConditions = ' LIKE ''%' + @SearchPattern
-	END
-
-	-- Condition 4: @Matchtype is 'contains'
-	IF @MatchType = 4
-	BEGIN
-		SET @MatchTypeConditions = ' LIKE ' + '''%' + @SearchPattern + '%'''
-	END
-
-*/
-
 -- Refactoring the stored procedure
 SET ANSI_NULLS ON
 GO
@@ -1482,15 +1451,15 @@ BEGIN
 
 	-- Condition 2: @Matchtype is 'begins with'
 	IF @MatchType = 2
-		SET @MatchTypeConditions = ' LIKE ''' + @SearchPattern + '%'''
+		SET @MatchTypeConditions = ' LIKE ' + '''' + @SearchPattern + '%'''
 
 	-- Condition 3: @Matchtype is 'ends with'
 	IF @MatchType = 3
-		SET @MatchTypeConditions = ' LIKE %' + @SearchPattern
+		SET @MatchTypeConditions = ' LIKE ''%' + @SearchPattern + ''''
 
 	-- Condition 4: @Matchtype is 'contains'
 	IF @MatchType = 4
-		SET @MatchTypeConditions = ' LIKE ' + '''%' + @SearchPattern + '%'''
+		SET @MatchTypeConditions = ' LIKE ''%' + @SearchPattern + '%'''
 
 -- Thirdly, outline IF conditions for the name column
 	-- first name condition: set NameColumn variable to FirstName
@@ -1502,8 +1471,8 @@ BEGIN
 		SET @NameColumn = 'MiddleName'
 
 	-- middle name condition: set NameColumn variable to MiddleName
-	IF @NameToSearch = 'middle'
-		SET @NameColumn = 'MiddleName'
+	IF @NameToSearch = 'last'
+		SET @NameColumn = 'LastName'
 
 -- Set the @NameSerachVar variables (last one to set)
 	SET @NameSearchVar = 'SELECT * FROM Person.Person WHERE ' 
@@ -1516,7 +1485,5 @@ BEGIN
 
 END
 
-select @NameSearchVar
 -- Test stored procedure (procedures don't need parentheses for parameters)
-EXEC dbo.NameSearch first, 1, Andrew
-
+EXEC dbo.NameSearch first,3,y
