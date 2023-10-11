@@ -725,7 +725,798 @@ SELECT
 
 FROM 	sales.SalesOrderHeader A
 
-WHERE 	A.TotalDue > @Threshold																	-- Replaced 100 with @Threshold INT variable
+WHERE 	A.TotalDue >= @Threshold																	-- Replaced 100 with @Threshold INT variable
 	AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)		-- Replaced the date with @StartYear and @EndYear INT variables
 
 END
+
+-- Execute the procedure
+EXEC dbo.OrdersAboveThreshold 10000, 2011, 2013
+
+-------------------------------------------------------------------------------------------
+
+-----------------------------------------------------
+------------ CONTROL FLOW USING IF ------------------
+-----------------------------------------------------
+
+/* 
+The difference between CASE statements and IF statements is:
+- CASE statements only return values in a SELECT query.
+- IF statements can execute whole query outputs and any other 'side effects'
+
+Example below:
+*/
+
+-- Example of IF statement to return 'Hello, world!' using variable.
+DECLARE @MyInput INT 
+
+SET @MyInput = 2
+
+IF @MyInput > 1
+	BEGIN
+	SELECT 'Hello, world!'
+	END
+
+-- Example of IF statement when the logical condition is NOT met.
+DECLARE @MyInput INT 
+
+SET @MyInput = 1	-- Changed @MyInput variable to 1 (which is not greater than 1)
+
+IF @MyInput > 1
+	BEGIN
+	SELECT 'Hello, world!'
+	END
+
+
+-- Example of the IF ELSE
+DECLARE @MyInput INT 
+
+SET @MyInput = 1
+
+IF @MyInput > 1
+	BEGIN
+	SELECT 'Hello, world!'
+	END
+ELSE
+	BEGIN
+	SELECT 'Farewell for now!'
+	END
+
+
+-- Proper example of using IF ELSE with Stored Procedure
+-- We can ALTER the OrdersReport stored procedure amd add a parameter to switch between Sales or Purchase
+
+-- The SCRIPT as ALTER
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER PROCEDURE [dbo].[OrdersReport] (@TopN INT,@OrderType INT)			-- Added the new parameter in this line. User can type in 1 for sales orders. IF @OrderType = 1 THEN Sales ELSE Purchase.
+
+AS
+
+BEGIN																					-- This is BEGIN END block is for the stored procedure. Others are for the IF ELSE statement
+	IF @OrderType = 1
+		BEGIN
+			SELECT
+				*
+			FROM(
+				SELECT
+					product_name = B.Name,
+					line_total_sum = SUM(A.LineTotal),
+					line_total_sum_rank = DENSE_RANK() OVER (ORDER BY Sum(A.LineTotal) DESC)
+
+				FROM AdventureWorks2017.Sales.SalesOrderDetail A
+					JOIN AdventureWorks2017.Production.Product B
+						ON A.ProductID = B.ProductID
+			
+				GROUP BY
+					B.Name
+					
+				) X
+
+			WHERE line_total_sum_rank <= @TopN
+		END
+	
+	ELSE
+		BEGIN
+			SELECT
+				*
+			FROM(
+				SELECT
+					product_name = B.Name,
+					line_total_sum = SUM(A.LineTotal),
+					line_total_sum_rank = DENSE_RANK() OVER (ORDER BY Sum(A.LineTotal) DESC)
+
+				FROM AdventureWorks2017.Purchasing.PurchaseOrderDetail A
+					JOIN AdventureWorks2017.Production.Product B
+						ON A.ProductID = B.ProductID
+			
+				GROUP BY
+					B.Name
+					
+				) X
+
+			WHERE line_total_sum_rank <= @TopN
+		END
+
+END
+;
+GO
+
+
+-- Execute the procedure, using 1 in the second parameter for top N sales orders
+EXEC dbo.OrdersReport 15,1
+
+-- Execute the procedure, using any other number in the second parameter for top N purchase orders
+EXEC dbo.OrdersReport 15,2
+
+----------------------------------------------------------------------------------------------------
+
+/*
+Control Flow With IF Statements - Exercise
+Modify the stored procedure you created for the stored procedures exercise (dbo.OrdersAboveThreshold) to include an additional parameter called "@OrderType" (data type INT).
+If the user supplies a value of 1 to this parameter, your modified proc should return the same output as previously.
+If however the user supplies a value of 2, your proc should return purchase orders instead of sales orders.
+Use IF/ELSE blocks to accomplish this.
+*/
+
+-- Original stored procedure code
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[OrdersAboveThreshold] (@Threshold INT, @StartYear INT, @EndYear INT)
+
+AS
+
+BEGIN
+
+SELECT
+		A.SalesOrderID,
+		A.TotalDue,
+		A.OrderDate
+
+FROM 	sales.SalesOrderHeader A
+
+WHERE 	A.TotalDue >= @Threshold																	-- Replaced 100 with @Threshold INT variable
+	AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)		-- Replaced the date with @StartYear and @EndYear INT variables
+
+END
+GO
+
+
+-- Modified stored procedure code
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[OrdersAboveThreshold] (@Threshold INT, @OrderType INT, @StartYear INT, @EndYear INT)
+
+AS
+
+BEGIN
+	IF @OrderType = 1
+		BEGIN
+			SELECT
+					A.SalesOrderID,
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	sales.SalesOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+				AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)																
+																	
+
+		END
+	ELSE
+		BEGIN
+			SELECT
+					A.PurchaseOrderID,
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	Purchasing.PurchaseOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+				AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)																
+
+		END	
+END
+GO
+
+-- Execute the program to test. @OrderType = 1
+EXEC dbo.OrdersAboveThreshold 10000,1,2011,2013
+
+-- Execute the program to test. @OrderType = 2
+EXEC dbo.OrdersAboveThreshold 10000,2,2011,2013
+
+-------------------------------------------------------------------------------------------
+
+-----------------------------------------------------
+------------ MULTIPLE IF STATEMENTS------------------
+-----------------------------------------------------
+
+/* 
+SQL does NOT have an IFELSE statement
+
+One workaround is to nest it, but that's ugly (like in Power BI DAX)
+
+Another way we can do this is if we just convert the ELSE block into an IF block
+
+The way it works is that if the first condition is not met, move onto the next, then the next and so on.
+
+As long as the IF statements do not overlap.
+*/
+
+--Multiple IF statement example
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE dbo.OrdersReport(@TopN INT, @OrderType INT)
+
+AS
+
+BEGIN
+
+	IF @OrderType = 1
+		BEGIN
+			SELECT
+				*
+			FROM (
+				SELECT 
+					ProductName = B.[Name],
+					LineTotalSum = SUM(A.LineTotal),
+					LineTotalSumRank = DENSE_RANK() OVER(ORDER BY SUM(A.LineTotal) DESC)
+
+				FROM AdventureWorks2017.Sales.SalesOrderDetail A
+					JOIN AdventureWorks2017.Production.Product B
+						ON A.ProductID = B.ProductID
+
+				GROUP BY
+					B.[Name]
+				) X
+
+			WHERE LineTotalSumRank <= @TopN
+		END
+	IF @OrderType = 2
+		BEGIN
+				SELECT
+					*
+				FROM(
+					SELECT 
+						ProductName = B.[Name],
+						LineTotalSum = SUM(A.LineTotal),
+						LineTotalSumRank = DENSE_RANK() OVER(ORDER BY SUM(A.LineTotal) DESC)
+
+					FROM AdventureWorks2017.Purchasing.PurchaseOrderDetail A
+						JOIN AdventureWorks2017.Production.Product B
+							ON A.ProductID = B.ProductID
+
+					GROUP BY
+						B.[Name]
+					) X
+
+				WHERE LineTotalSumRank <= @TopN
+			END
+
+	IF @OrderType = 3											-- @OrderType = 3 is a temp table that unions sales and purchases
+		BEGIN
+			-- Create temp table and insert sales				
+			SELECT
+				ProductID,
+				LineTotal
+
+			INTO #AllOrders
+
+			FROM AdventureWorks2017.Sales.SalesOrderDetail
+
+			-- Inserting Purchase Orders
+			INSERT INTO #AllOrders
+
+			SELECT
+				ProductID,
+				LineTotal
+
+			FROM AdventureWorks2017.Purchasing.PurchaseOrderDetail
+					
+			-- Calling the temp table 
+			SELECT
+				*
+			FROM (
+				SELECT 
+					ProductName = B.[Name],
+					LineTotalSum = SUM(A.LineTotal),
+					LineTotalSumRank = DENSE_RANK() OVER(ORDER BY SUM(A.LineTotal) DESC)
+
+				FROM #AllOrders A
+					JOIN AdventureWorks2017.Production.Product B
+						ON A.ProductID = B.ProductID
+
+				GROUP BY
+					B.[Name]
+				) X
+
+			WHERE LineTotalSumRank <= @TopN
+
+			DROP TABLE #AllOrders
+		END
+END
+
+
+
+--Call modified stored procedure
+
+
+EXEC dbo.OrdersReport 20,1
+
+EXEC dbo.OrdersReport 15,2
+
+EXEC dbo.OrdersReport 25,3
+
+-----------------------------------------------------------------------------------
+
+/*
+Using Multiple IF Statements - Exercise
+
+Modify your "dbo.OrdersAboveThreshold" stored procedure once again, such that if a user supplies a value of 3 to the @OrderType parameter, the proc should return all sales AND purchase orders above the specified threshold, with order dates between the specified years.
+
+In this scenario, include an "OrderType" column to the procedure output. This column should have a value of "Sales" for records from the SalesOrderHeader table, and "Purchase" for records from the PurchaseOrderHeader table.
+
+Hints:
+- Convert your ELSE block to an IF block, so that you now have 3 independent IF blocks.
+- Make sure that your IF criteria are all mutually exclusive.
+- Use UNION ALL to "stack" the sales and purchase data.
+- Alias SalesOrderId/PurchaseOrderID as "OrderID" in their respective UNION-ed queries.
+*/
+
+
+-- Modifying the script
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[OrdersAboveThreshold] (@Threshold INT, @OrderType INT, @StartYear INT, @EndYear INT)
+
+AS
+
+BEGIN
+	-- First OrderType for sales
+	IF @OrderType = 1
+		BEGIN
+			SELECT
+					A.SalesOrderID,
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	sales.SalesOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+				AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)																
+
+			ORDER BY OrderDate ASC								
+
+		END
+	
+	-- Second OrderType for purchases
+	IF @OrderType = 2
+		BEGIN
+			SELECT
+					A.PurchaseOrderID,
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	Purchasing.PurchaseOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+
+			ORDER BY OrderDate ASC	
+
+		END	
+	
+	-- Third OrderType for both
+	IF @OrderType = 3
+		BEGIN
+			SELECT
+					A.SalesOrderID as [OrderID],
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	sales.SalesOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+				AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)		
+
+				UNION ALL
+			
+			SELECT
+					A.PurchaseOrderID as [OrderID],
+					A.TotalDue,
+					A.OrderDate
+
+			FROM 	Purchasing.PurchaseOrderHeader A
+
+			WHERE 	A.TotalDue >= @Threshold
+				AND	A.OrderDate BETWEEN DATEFROMPARTS(@StartYear,1,1) AND DATEFROMPARTS(@EndYear,12,31)	
+
+			ORDER BY OrderDate ASC	
+
+		END
+END
+GO
+
+
+-- Call the modified stored procedure
+EXEC dbo.OrdersAboveThreshold 10000,1,2011,2013
+
+EXEC dbo.OrdersAboveThreshold 10000,2,2011,2013
+
+EXEC dbo.OrdersAboveThreshold 10000,3,2011,2013
+
+-----------------------------------------------------------------------------------
+
+-----------------------------------------------------
+--------------- DYNAMIC SQL PT 1 --------------------
+-----------------------------------------------------
+
+/*
+
+Writing code that writes code? Seems like AI. This section is not quite that, but it's more like turning queries into strings, and then passing through variables where the user can make their input via parameters. 
+
+We can concatenate these query strings to create Dynamic SQL queries 
+
+*/
+
+/* Simple example below */
+-- The below is the query we want to use
+SELECT TOP 100 * FROM AdventureWorks2017.Production.Product
+
+
+-- Let's create some dynamic SQL. Start with making a variable
+DECLARE @DynamicSQL VARCHAR(MAX)
+
+SET @DynamicSQL = 'SELECT TOP 100 * FROM AdventureWorks2017.Production.Product'
+
+-- To execute the variable, if it is a string, we will need to wrap the variable in parentheses
+EXEC(@DynamicSQL)
+
+
+/* Use case example - part 1 */
+
+-- Below is a part 1 of an example.
+-- The starting code
+SELECT
+	*
+FROM(
+	SELECT
+		ProductName = B.Name,
+		LineTotalSum = SUM(A.LineTotal),
+		LineTotalSumRank = DENSE_RANK() OVER (ORDER BY SUM(A.LineTotal) DESC)
+	FROM AdventureWorks2017.Sales.SalesOrderDetail A
+		JOIN AdventureWorks2017.Production.Product B
+			ON A.ProductID = B.ProductID
+
+	GROUP BY
+		B.Name
+	) X
+
+WHERE LineTotalSumRank <= 10
+
+
+-- Declaring the variables
+DECLARE @TopN INT = 10
+DECLARE @AggFunction VARCHAR(50) = 'AVG'
+DECLARE @DynamicSQL VARCHAR(MAX)
+
+
+-- Set our variable with the SQL Query up to where the next variable and wrap it in quotation conert the query into a string
+SET @DynamicSQL	= 'SELECT
+		*
+	FROM(
+		SELECT
+			ProductName = B.Name,
+			LineTotalSum = '
+
+
+-- Like in Python, update the variable by having it = itself + the next string
+SET @DynamicSQL = @DynamicSQL + @AggFunction
+
+
+-- Again, copy the SQL query from after the SUM to the next SUM and then append the variable, up to where we want @TopN
+SET @DynamicSQL	= @DynamicSQL + '(A.LineTotal),
+		LineTotalSumRank = DENSE_RANK() OVER (ORDER BY '
+
+SET @DynamicSQL = @DynamicSQL + @AggFunction
+
+SET @DynamicSQL = @DynamicSQL + '(A.LineTotal) DESC)
+	FROM AdventureWorks2017.Sales.SalesOrderDetail A
+		JOIN AdventureWorks2017.Production.Product B
+			ON A.ProductID = B.ProductID
+
+	GROUP BY
+		B.Name
+	) X 
+
+WHERE LineTotalSumRank <= '
+
+-- Append the @TopN variable. Don't forget it has to be a string so CAST the INT variable
+SET @DynamicSQL = @DynamicSQL + CAST(@TopN as VARCHAR)
+
+
+-- Test the variable out with a SELECT statement (don't forget to highlight everything from DECLARE)
+SELECT @DynamicSQL
+
+----------------------------------------------------------------------------
+-- How to turn it into a stored procedure
+CREATE PROCEDURE dbo.DynamicTopN(@TopN INT, @AggFunction VARCHAR(50))
+
+AS
+
+BEGIN
+	-- We can remove the variables that are being used by parameters. ie. TopN and AggFunction
+	DECLARE @DynamicSQL VARCHAR(MAX)
+
+	SET @DynamicSQL	= 'SELECT
+			*
+		FROM(
+			SELECT
+				ProductName = B.Name,
+				LineTotalSum = '
+
+
+	SET @DynamicSQL = @DynamicSQL + @AggFunction
+
+
+	SET @DynamicSQL	= @DynamicSQL + '(A.LineTotal),
+			LineTotalSumRank = DENSE_RANK() OVER (ORDER BY '
+
+	SET @DynamicSQL = @DynamicSQL + @AggFunction
+
+	SET @DynamicSQL = @DynamicSQL + '(A.LineTotal) DESC)
+		FROM AdventureWorks2017.Sales.SalesOrderDetail A
+			JOIN AdventureWorks2017.Production.Product B
+				ON A.ProductID = B.ProductID
+
+		GROUP BY
+			B.Name
+		) X 
+
+	WHERE LineTotalSumRank <= '
+
+	SET @DynamicSQL = @DynamicSQL + CAST(@TopN as VARCHAR)
+
+	EXEC(@DynamicSQL)
+
+END
+;
+
+-- Test the stored procedure
+EXEC dbo.DynamicTopN 15,'AVG'
+
+EXEC dbo.DynamicTopN 5,'MAX'
+
+EXEC dbo.DynamicTopN 10,'SUM'
+;
+
+-------------------------------------------------------------------------------------------------------------------------
+/* Dynamic SQL - Exercises
+Exercise 1
+
+Create a stored procedure called "NameSearch" that allows users to search the Person.Person table for a pattern provided by the user.
+
+The user should be able to search by either first name, last name, or middle name.
+
+You can return all columns from the table; that is to say, feel free to use SELECT *.
+
+The stored procedure should take two arguments:
+- @NameToSearch: The user will be expected to enter either "first", "middle", or "last". This way, they do not have to remember exact column names.
+- @SearchPattern: The user will provide a text string to search for.
+
+A record should be returned if the specified name (first, middle, or last) includes the specified pattern anywhere within it.
+
+I.e., if the user tells us to search the FirstName field for the pattern "ravi", both the names "Ravi" and "Travis" should be returned.
+
+Hints:
+- You will probably want to use LIKE with a wildcard in your WHERE clause.
+- To include single quotes in your dynamic SQL, try "escaping" them by typing four consecutive single quotes ('''').
+- Try creating a variable to hold the actual column name to search, and then set this variable using IF statements, based on the value passed into the "NameToSearch" parameter by the user. Then simply plug this variable into your dynamic SQL. This is easier than having to execute different queries depending on what was passed in.
+
+*/
+
+-- Start with a simple SELECT query
+SELECT
+	*
+FROM Person.Person
+WHERE FirstName LIKE '%an%'
+;
+
+-- Declare variables and replace it in the Select Statement
+DECLARE @NameToSearch VARCHAR(30) = 'FirstName'
+DECLARE @SearchPattern VARCHAR(255) = 'an'
+DECLARE @NameSearchVar VARCHAR(MAX) = 'SELECT
+	* 
+FROM Person.Person 
+WHERE '
+
+-- Set the @NameSearchVar and @NameToSearch variables in place
+SET @NameSearchVar = @NameSearchVar + @NameToSearch + ' LIKE '
+
+-- Set the @SearchPatter and update @NameSearchVar 
+SET @NameSearchVar = @NameSearchVar + '''%' + @SearchPattern + '%'''
+
+-- Test the @NameSearchVar 
+-- SELECT @NameSearchVar
+
+-- Run the @NameSearchVar
+EXEC @NameSearchVar
+;
+
+-- Turning  it into a stored procedure
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[NameSearch] (@NameToSearch VARCHAR(30), @SearchPattern VARCHAR(255))
+
+AS
+
+BEGIN
+	-- Make the first variable
+	DECLARE @NameSearchVar VARCHAR(MAX) = 'SELECT
+		* 
+	FROM Person.Person 
+	WHERE '
+
+
+	-- first name condition
+	IF @NameToSearch = 'first'
+	BEGIN
+		SET @NameSearchVar = @NameSearchVar + 'FirstName' + ' LIKE '
+
+		SET @NameSearchVar = @NameSearchVar + '''%' + @SearchPattern + '%'''
+
+		EXEC (@NameSearchVar)
+	END
+
+
+	-- middle name condition
+	IF @NameToSearch = 'middle'
+	BEGIN
+		SET @NameSearchVar = @NameSearchVar + 'MiddleName' + ' LIKE '
+
+		SET @NameSearchVar = @NameSearchVar + '''%' + @SearchPattern + '%'''
+
+		EXEC (@NameSearchVar)
+	END
+
+
+	-- last name condition
+	IF @NameToSearch = 'last'
+	BEGIN
+		SET @NameSearchVar = @NameSearchVar + 'LastName' + ' LIKE '
+
+		SET @NameSearchVar = @NameSearchVar + '''%' + @SearchPattern + '%'''
+
+		EXEC (@NameSearchVar)
+	END
+END
+
+-- Test stored procedure (procedures don't need parentheses for parameters)
+EXEC dbo.NameSearch first,Andrew
+
+
+/*
+Exercise 2
+
+Modify your "NameSearch" procedure to accept a third argument - @MatchType, with an INT datatype -  that specifies the match type:
+
+1 means "exact match"
+
+2 means "begins with"
+
+3 means "ends with"
+
+4 means "contains"
+
+Hint: Use a series of IF statements to build out your WHERE clause based on the @MatchType parameter, then append this to the rest of your dynamic SQL before executing. */
+
+-- Start with a normal select query to understand
+SELECT
+	*
+FROM Person.Person
+WHERE FirstName LIKE '%an%' -- We will be editing LIKE and the wildcard (in quotation)
+
+/* This is the @MatchType condition code on its own
+
+
+DECLARE @MatchTypeConditions VARCHAR(255) = 
+	-- Condition 1: @Matchtype is 'exact match'
+	IF @MatchType = 1
+	BEGIN
+		SET @MatchTypeConditions = ' = ' + @SearchPattern
+	END
+
+
+	-- Condition 2: @Matchtype is 'begins with'
+	IF @MatchType = 2
+	BEGIN
+		SET @MatchTypeConditions = ' LIKE ' + @SearchPattern + '%'''
+	END
+
+	-- Condition 3: @Matchtype is 'ends with'
+	IF @MatchType = 3
+	BEGIN
+		SET @MatchTypeConditions = ' LIKE ''%' + @SearchPattern
+	END
+
+	-- Condition 4: @Matchtype is 'contains'
+	IF @MatchType = 4
+	BEGIN
+		SET @MatchTypeConditions = ' LIKE ' + '''%' + @SearchPattern + '%'''
+	END
+
+*/
+
+-- Refactoring the stored procedure
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[NameSearch] (@NameToSearch VARCHAR(30), @MatchType INT, @SearchPattern VARCHAR(255))
+
+AS
+
+BEGIN
+-- First DECLARE VARIABLES
+	DECLARE @NameSearchVar VARCHAR(MAX) 
+	DECLARE @MatchTypeConditions VARCHAR(MAX)
+	DECLARE @NameColumn VARCHAR (100)		-- New variable to change column 
+
+-- Secondly, outline the IF Conditions - @MatchType
+	-- Condition 1: @Matchtype is 'exact match'
+	IF @MatchType = 1
+		SET @MatchTypeConditions = ' = ''' + @SearchPattern + ''''
+
+	-- Condition 2: @Matchtype is 'begins with'
+	IF @MatchType = 2
+		SET @MatchTypeConditions = ' LIKE ''' + @SearchPattern + '%'''
+
+	-- Condition 3: @Matchtype is 'ends with'
+	IF @MatchType = 3
+		SET @MatchTypeConditions = ' LIKE %' + @SearchPattern
+
+	-- Condition 4: @Matchtype is 'contains'
+	IF @MatchType = 4
+		SET @MatchTypeConditions = ' LIKE ' + '''%' + @SearchPattern + '%'''
+
+-- Thirdly, outline IF conditions for the name column
+	-- first name condition: set NameColumn variable to FirstName
+	IF @NameToSearch = 'first'
+		SET @NameColumn = 'FirstName'
+
+	-- middle name condition: set NameColumn variable to MiddleName
+	IF @NameToSearch = 'middle'
+		SET @NameColumn = 'MiddleName'
+
+	-- middle name condition: set NameColumn variable to MiddleName
+	IF @NameToSearch = 'middle'
+		SET @NameColumn = 'MiddleName'
+
+-- Set the @NameSerachVar variables (last one to set)
+	SET @NameSearchVar = 'SELECT * FROM Person.Person WHERE ' 
+
+-- Concat with other variables using the python append method
+	SET @NameSearchVar = @NameSearchVar + @NameColumn + @MatchTypeConditions
+
+-- Lastly, execute the string as a SQL query
+	EXEC (@NameSearchVar)
+
+END
+
+select @NameSearchVar
+-- Test stored procedure (procedures don't need parentheses for parameters)
+EXEC dbo.NameSearch first, 1, Andrew
+
