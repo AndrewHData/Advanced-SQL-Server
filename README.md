@@ -1,1 +1,1 @@
-Showcase of my understanding of advanced SQL Server functions/
+Showcase of my understanding of advanced SQL Server functions
